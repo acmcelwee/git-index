@@ -11,14 +11,14 @@ import (
 )
 
 type Event struct {
-	Path      string `json:"path"`
-	Timestamp int64  `json:"timestamp"`
+	Path       string  `json:"path"`
+	Timestamp  int64   `json:"timestamp,omitempty"`  // Legacy fallback
+	Timestamps []int64 `json:"timestamps,omitempty"` // Array of timestamps
 }
 
 type Entry struct {
-	Path         string
-	Count        int
-	LastAccessed int64
+	Path       string
+	Timestamps []int64
 }
 
 func getPath() (string, error) {
@@ -49,19 +49,91 @@ func Load() (map[string]Entry, error) {
 	for scanner.Scan() {
 		var event Event
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			continue // Skip invalid lines
+			continue
 		}
 
 		entry := entries[event.Path]
 		entry.Path = event.Path
-		entry.Count++
-		if event.Timestamp > entry.LastAccessed {
-			entry.LastAccessed = event.Timestamp
+		
+		if event.Timestamp > 0 {
+			entry.Timestamps = append(entry.Timestamps, event.Timestamp)
 		}
+		if len(event.Timestamps) > 0 {
+			entry.Timestamps = append(entry.Timestamps, event.Timestamps...)
+		}
+		
 		entries[event.Path] = entry
 	}
 
 	return entries, nil
+}
+
+func Compact() error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	maxAgeStr := cfg.MaxFrecencyAge
+	if maxAgeStr == "" {
+		maxAgeStr = "2160h" // 90 days default
+	}
+	
+	maxAge, err := time.ParseDuration(maxAgeStr)
+	if err != nil {
+		maxAge = 90 * 24 * time.Hour
+	}
+	
+	cutoff := time.Now().Add(-maxAge).Unix()
+
+	entries, err := Load()
+	if err != nil {
+		return err
+	}
+
+	logPath, err := getPath()
+	if err != nil {
+		return err
+	}
+
+	tmpPath := logPath + ".tmp"
+	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+
+	for path, entry := range entries {
+		// Prune stale paths
+		if stat, err := os.Stat(path); err != nil || !stat.IsDir() {
+			continue
+		}
+
+		// Prune old timestamps
+		var validTimestamps []int64
+		for _, ts := range entry.Timestamps {
+			if ts >= cutoff {
+				validTimestamps = append(validTimestamps, ts)
+			}
+		}
+
+		if len(validTimestamps) == 0 {
+			continue
+		}
+
+		event := Event{
+			Path:       path,
+			Timestamps: validTimestamps,
+		}
+		
+		data, err := json.Marshal(event)
+		if err == nil {
+			data = append(data, '\n')
+			file.Write(data)
+		}
+	}
+	file.Close()
+
+	return os.Rename(tmpPath, logPath)
 }
 
 func Track(path string) error {
@@ -77,42 +149,66 @@ func Track(path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	event := Event{
-		Path:      path,
-		Timestamp: time.Now().Unix(),
+		Path:       path,
+		Timestamps: []int64{time.Now().Unix()},
 	}
 
 	data, err := json.Marshal(event)
 	if err != nil {
+		file.Close()
 		return err
 	}
 
 	data = append(data, '\n')
 	_, err = file.Write(data)
+	
+	// Check size for compaction before closing
+	stat, statErr := file.Stat()
+	file.Close()
+	
+	if statErr == nil && err == nil {
+		cfg, cfgErr := config.LoadConfig()
+		var maxSize int64 = 50 * 1024
+		if cfgErr == nil && cfg.MaxFrecencyLogSize > 0 {
+			maxSize = cfg.MaxFrecencyLogSize
+		}
+		
+		if stat.Size() > maxSize {
+			Compact()
+		}
+	}
+
 	return err
 }
 
 func Score(entry Entry) float64 {
-	if entry.Count == 0 {
+	if len(entry.Timestamps) == 0 {
 		return 0
 	}
 
 	now := time.Now().Unix()
-	dt := now - entry.LastAccessed
+	var score float64
 
-	// dt is in seconds
-	var multiplier float64
-	if dt < 3600 { // 1 hour
-		multiplier = 4.0
-	} else if dt < 86400 { // 1 day
-		multiplier = 2.0
-	} else if dt < 604800 { // 1 week
-		multiplier = 0.5
-	} else {
-		multiplier = 0.1
+	for _, ts := range entry.Timestamps {
+		dt := now - ts
+		if dt < 0 {
+			dt = 0 // Future? Shouldn't happen, but safe
+		}
+
+		var multiplier float64
+		if dt < 3600 { // 1 hour
+			multiplier = 4.0
+		} else if dt < 86400 { // 1 day
+			multiplier = 2.0
+		} else if dt < 604800 { // 1 week
+			multiplier = 0.5
+		} else {
+			multiplier = 0.1
+		}
+		score += multiplier
 	}
 
-	return float64(entry.Count) * multiplier
+	return score
 }

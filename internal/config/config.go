@@ -17,6 +17,8 @@ type Config struct {
 	Ignore              []string    `mapstructure:"ignore" toml:"ignore"`
 	SearchDirs          []SearchDir `mapstructure:"search_dirs" toml:"search_dirs"`
 	AutoRebuildInterval string      `mapstructure:"auto_rebuild_interval" toml:"auto_rebuild_interval"`
+	MaxFrecencyLogSize  int64       `mapstructure:"max_frecency_log_size" toml:"max_frecency_log_size"` // Bytes
+	MaxFrecencyAge      string      `mapstructure:"max_frecency_age" toml:"max_frecency_age"` // Duration string
 }
 
 func GetConfigDir() (string, error) {
@@ -62,6 +64,8 @@ func InitConfig() error {
 			// Write a default config
 			viper.Set("ignore", []string{"**/archive/**", "**/node_modules/**", "**/.terraform/**"})
 			viper.Set("auto_rebuild_interval", "24h")
+			viper.Set("max_frecency_log_size", 50*1024) // 50 KB
+			viper.Set("max_frecency_age", "2160h")      // 90 days (90 * 24h)
 
 			home, _ := os.UserHomeDir()
 			viper.Set("search_dirs", []SearchDir{
