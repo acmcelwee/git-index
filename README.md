@@ -14,9 +14,9 @@ A blazingly fast git repository jumper written in Go. A modern, customizable rep
 
 ## Installation
 
-1. Compile the binary:
+1. Compile the binary using `just`:
    ```bash
-   go build -o git-index main.go
+   just build
    ```
 2. Move it to your PATH (e.g. `~/bin/` or `~/.local/bin/`):
    ```bash
