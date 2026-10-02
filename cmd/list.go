@@ -25,7 +25,11 @@ var listCmd = &cobra.Command{
 		}
 
 		for _, repo := range repos {
-			fmt.Println(repo)
+			if repo.Type != "repo" {
+				fmt.Printf("%s\t[%s]\n", repo.Path, repo.DisplayName)
+			} else {
+				fmt.Println(repo.Path)
+			}
 		}
 	},
 }

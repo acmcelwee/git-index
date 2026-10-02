@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/adam/git-index/internal/indexer"
@@ -15,7 +14,9 @@ var matchCmd = &cobra.Command{
 	Short: "Match a query to a repository path",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Strip trailing slashes so auto-completed paths (like "container/") work correctly
+		checkAndTriggerBackgroundRebuild()
+		
+		// Strip trailing slashes so auto-completed paths work correctly
 		query := strings.TrimRight(strings.ToLower(args[0]), "/")
 		
 		repos, err := indexer.LoadIndex()
@@ -31,25 +32,25 @@ var matchCmd = &cobra.Command{
 			}
 		}
 
-		var exactMatches []string
-		var startsWithMatches []string
-		var containsMatches []string
-		var pathMatches []string
+		var exactMatches []indexer.RepoEntry
+		var startsWithMatches []indexer.RepoEntry
+		var containsMatches []indexer.RepoEntry
+		var pathMatches []indexer.RepoEntry
 
 		for _, repo := range repos {
-			base := strings.ToLower(filepath.Base(repo))
-			if base == query {
+			display := strings.ToLower(repo.DisplayName)
+			if display == query {
 				exactMatches = append(exactMatches, repo)
-			} else if strings.HasPrefix(base, query) {
+			} else if strings.HasPrefix(display, query) {
 				startsWithMatches = append(startsWithMatches, repo)
-			} else if strings.Contains(base, query) {
+			} else if strings.Contains(display, query) {
 				containsMatches = append(containsMatches, repo)
-			} else if strings.Contains(strings.ToLower(repo), query) {
+			} else if strings.Contains(strings.ToLower(repo.Path), query) {
 				pathMatches = append(pathMatches, repo)
 			}
 		}
 
-		var finalMatches []string
+		var finalMatches []indexer.RepoEntry
 		if len(exactMatches) > 0 {
 			finalMatches = exactMatches
 		} else if len(startsWithMatches) > 0 {
@@ -64,7 +65,23 @@ var matchCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// JIT existence check
+		var validMatches []string
 		for _, match := range finalMatches {
+			if stat, err := os.Stat(match.Path); err == nil && stat.IsDir() {
+				validMatches = append(validMatches, match.Path)
+			} else {
+				// Path no longer exists, remove from index
+				fmt.Fprintf(os.Stderr, "Removing stale path from index: %s\n", match.Path)
+				indexer.RemoveFromIndex(match.Path)
+			}
+		}
+
+		if len(validMatches) == 0 {
+			os.Exit(1)
+		}
+
+		for _, match := range validMatches {
 			fmt.Println(match)
 		}
 	},
