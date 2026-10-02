@@ -14,8 +14,9 @@ type SearchDir struct {
 }
 
 type Config struct {
-	Ignore     []string    `mapstructure:"ignore" toml:"ignore"`
-	SearchDirs []SearchDir `mapstructure:"search_dirs" toml:"search_dirs"`
+	Ignore              []string    `mapstructure:"ignore" toml:"ignore"`
+	SearchDirs          []SearchDir `mapstructure:"search_dirs" toml:"search_dirs"`
+	AutoRebuildInterval string      `mapstructure:"auto_rebuild_interval" toml:"auto_rebuild_interval"`
 }
 
 func GetConfigDir() (string, error) {
@@ -60,6 +61,7 @@ func InitConfig() error {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Write a default config
 			viper.Set("ignore", []string{"**/archive/**", "**/node_modules/**", "**/.terraform/**"})
+			viper.Set("auto_rebuild_interval", "24h")
 			
 			home, _ := os.UserHomeDir()
 			viper.Set("search_dirs", []SearchDir{
