@@ -16,8 +16,9 @@ fi
 # Bash completion
 _git_index_bash_complete() {
     local cur=${COMP_WORDS[COMP_CWORD]}
-    local completions=$(git-index complete)
-    COMPREPLY=( $(compgen -W "$completions" -- $cur) )
+    local IFS=$'\n'
+    local completions=($(git-index complete))
+    COMPREPLY=( $(compgen -W "${completions[*]}" -- "$cur") )
 }
 
 if [[ -n "$BASH_VERSION" ]]; then
