@@ -35,6 +35,7 @@ var completeCmd = &cobra.Command{
 		fmt.Println("--list")
 
 		frecencyData, _ := frecency.Load()
+		halfLife := frecency.GetHalfLife()
 
 		type completionItem struct {
 			name  string
@@ -43,7 +44,7 @@ var completeCmd = &cobra.Command{
 
 		nameScores := make(map[string]float64)
 		for _, repo := range repos {
-			score := frecency.Score(frecencyData[repo.Path])
+			score := frecency.Score(frecencyData[repo.Path], halfLife)
 			if current, exists := nameScores[repo.DisplayName]; !exists || score > current {
 				nameScores[repo.DisplayName] = score
 			}

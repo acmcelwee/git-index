@@ -84,10 +84,11 @@ var matchCmd = &cobra.Command{
 		}
 
 		frecencyData, _ := frecency.Load()
+		halfLife := frecency.GetHalfLife()
 
 		sort.SliceStable(validMatches, func(i, j int) bool {
-			scoreI := frecency.Score(frecencyData[validMatches[i]])
-			scoreJ := frecency.Score(frecencyData[validMatches[j]])
+			scoreI := frecency.Score(frecencyData[validMatches[i]], halfLife)
+			scoreJ := frecency.Score(frecencyData[validMatches[j]], halfLife)
 			return scoreI > scoreJ
 		})
 

@@ -3,6 +3,7 @@ package frecency
 import (
 	"bufio"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -183,7 +184,26 @@ func Track(path string) error {
 	return err
 }
 
-func Score(entry Entry) float64 {
+func GetHalfLife() float64 {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return 72 * 3600 // 3 days default
+	}
+
+	hlStr := cfg.FrecencyHalfLife
+	if hlStr == "" {
+		hlStr = "72h"
+	}
+
+	duration, err := time.ParseDuration(hlStr)
+	if err != nil {
+		return 72 * 3600
+	}
+
+	return duration.Seconds()
+}
+
+func Score(entry Entry, halfLifeSecs float64) float64 {
 	if len(entry.Timestamps) == 0 {
 		return 0
 	}
@@ -192,22 +212,13 @@ func Score(entry Entry) float64 {
 	var score float64
 
 	for _, ts := range entry.Timestamps {
-		dt := now - ts
+		dt := float64(now - ts)
 		if dt < 0 {
 			dt = 0 // Future? Shouldn't happen, but safe
 		}
 
-		var multiplier float64
-		if dt < 3600 { // 1 hour
-			multiplier = 4.0
-		} else if dt < 86400 { // 1 day
-			multiplier = 2.0
-		} else if dt < 604800 { // 1 week
-			multiplier = 0.5
-		} else {
-			multiplier = 0.1
-		}
-		score += multiplier
+		// Calculate continuous exponential decay: score = 1.0 * (0.5 ^ (dt / halfLife))
+		score += math.Pow(0.5, dt/halfLifeSecs)
 	}
 
 	return score
