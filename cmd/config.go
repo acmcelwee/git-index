@@ -51,7 +51,7 @@ var addRootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	
+
 	addRootCmd.Flags().Int("depth", 3, "Maximum depth to search")
 	configCmd.AddCommand(addRootCmd)
 }

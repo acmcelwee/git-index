@@ -81,7 +81,7 @@ var updateCmd = &cobra.Command{
 		}
 		// Some github releases return 403 or need a user agent
 		req.Header.Set("User-Agent", "git-index-updater")
-		
+
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error downloading update:", err)

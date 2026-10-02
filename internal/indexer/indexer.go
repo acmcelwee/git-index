@@ -57,7 +57,7 @@ func parseGitFile(dotGitPath string, repoPath string) RepoEntry {
 		if len(parts) == 2 {
 			parentPath := parts[0]
 			parentName := filepath.Base(parentPath)
-			
+
 			if strings.HasPrefix(parts[1], "worktrees/") {
 				return RepoEntry{
 					Path:        repoPath,
@@ -147,11 +147,11 @@ func Index() error {
 					} else {
 						entry = parseGitFile(path, repoPath)
 					}
-					
+
 					mu.Lock()
 					allRepos = append(allRepos, entry)
 					mu.Unlock()
-					
+
 					if d.IsDir() {
 						return filepath.SkipDir // Don't descend into .git
 					}
@@ -191,7 +191,7 @@ func Index() error {
 		os.Remove(tempPath)
 		return err
 	}
-	
+
 	file.Close()
 
 	indexPath := filepath.Join(cacheDir, "index.json")
@@ -205,7 +205,7 @@ func LoadIndex() ([]RepoEntry, error) {
 	}
 
 	indexPath := filepath.Join(cacheDir, "index.json")
-	
+
 	// Fallback to old index.txt if JSON doesn't exist yet
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 		oldPath := filepath.Join(cacheDir, "index.txt")
@@ -233,26 +233,26 @@ func RemoveFromIndex(pathToRemove string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var filtered []RepoEntry
 	for _, repo := range repos {
 		if repo.Path != pathToRemove {
 			filtered = append(filtered, repo)
 		}
 	}
-	
+
 	cacheDir, err := config.GetCacheDir()
 	if err != nil {
 		return err
 	}
-	
+
 	file, err := os.CreateTemp(cacheDir, "index-*.json.tmp")
 	if err != nil {
 		return err
 	}
 	tempPath := file.Name()
 	os.Chmod(tempPath, 0600)
-	
+
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(filtered); err != nil {
@@ -261,7 +261,7 @@ func RemoveFromIndex(pathToRemove string) error {
 		return err
 	}
 	file.Close()
-	
+
 	indexPath := filepath.Join(cacheDir, "index.json")
 	return os.Rename(tempPath, indexPath)
 }
@@ -271,14 +271,14 @@ func migrateOldIndex(oldPath string) ([]RepoEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repos []RepoEntry
 	for _, line := range strings.Split(string(content), "\n") {
 		if strings.TrimSpace(line) != "" {
 			repos = append(repos, RepoEntry{
-				Path: line,
+				Path:        line,
 				DisplayName: filepath.Base(line),
-				Type: "repo",
+				Type:        "repo",
 			})
 		}
 	}

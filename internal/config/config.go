@@ -62,12 +62,12 @@ func InitConfig() error {
 			// Write a default config
 			viper.Set("ignore", []string{"**/archive/**", "**/node_modules/**", "**/.terraform/**"})
 			viper.Set("auto_rebuild_interval", "24h")
-			
+
 			home, _ := os.UserHomeDir()
 			viper.Set("search_dirs", []SearchDir{
 				{Path: filepath.Join(home, "src"), MaxDepth: 4},
 			})
-			
+
 			if err := viper.SafeWriteConfig(); err != nil {
 				return err
 			}
