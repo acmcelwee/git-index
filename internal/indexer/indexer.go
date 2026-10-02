@@ -13,6 +13,9 @@ import (
 )
 
 func expandHome(path string) (string, error) {
+	if path == "~" {
+		return os.UserHomeDir()
+	}
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -54,7 +57,7 @@ func Index() error {
 
 			// If max depth is 0, we just check this directory
 			if sdir.MaxDepth == 0 {
-				if stat, err := os.Stat(filepath.Join(rootPath, ".git")); err == nil && stat.IsDir() {
+				if _, err := os.Stat(filepath.Join(rootPath, ".git")); err == nil {
 					mu.Lock()
 					allRepos = append(allRepos, rootPath)
 					mu.Unlock()
@@ -74,12 +77,12 @@ func Index() error {
 					return nil
 				}
 
-				// Calculate depth
+				// Calculate depth using zero-allocation strings.Count
 				rel, _ := filepath.Rel(rootPath, path)
 				if rel == "." {
 					return nil
 				}
-				depth := len(strings.Split(rel, string(os.PathSeparator)))
+				depth := strings.Count(rel, string(os.PathSeparator)) + 1
 
 				if depth > sdir.MaxDepth {
 					if d.IsDir() {
@@ -94,6 +97,12 @@ func Index() error {
 					allRepos = append(allRepos, repoPath)
 					mu.Unlock()
 					return filepath.SkipDir // Don't descend into .git
+				} else if !d.IsDir() && d.Name() == ".git" {
+					// Handle git worktrees and submodules where .git is a file
+					repoPath := filepath.Dir(path)
+					mu.Lock()
+					allRepos = append(allRepos, repoPath)
+					mu.Unlock()
 				}
 
 				return nil
@@ -111,19 +120,31 @@ func Index() error {
 		return err
 	}
 
-	tempPath := filepath.Join(cacheDir, "index.txt.tmp")
-	file, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	file, err := os.CreateTemp(cacheDir, "index-*.tmp")
 	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+
+	// Ensure the temp file has the correct permissions
+	if err := os.Chmod(tempPath, 0600); err != nil {
+		file.Close()
+		os.Remove(tempPath)
 		return err
 	}
 
 	writer := bufio.NewWriter(file)
 	for _, repo := range allRepos {
-		_, _ = writer.WriteString(repo + "\n")
+		if _, err := writer.WriteString(repo + "\n"); err != nil {
+			file.Close()
+			os.Remove(tempPath)
+			return err
+		}
 	}
 	
 	if err := writer.Flush(); err != nil {
 		file.Close()
+		os.Remove(tempPath)
 		return err
 	}
 	file.Close()
