@@ -31,7 +31,7 @@ jobs:
               binary_name="git-index-${GOOS}-${GOARCH}"
               
               echo "Building for $GOOS/$GOARCH..."
-              go build -ldflags="-s -w" -o "$binary_name" main.go
+              go build -ldflags="-s -w -X 'github.com/acmcelwee/git-index/cmd.Version=${GITHUB_REF_NAME}'" -o "$binary_name" main.go
               
               echo "Packaging $binary_name..."
               tar -czvf "dist/${binary_name}.tar.gz" "$binary_name" README.md git-index.sh
