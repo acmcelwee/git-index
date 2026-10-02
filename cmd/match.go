@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
+	"github.com/acmcelwee/git-index/internal/frecency"
 	"github.com/acmcelwee/git-index/internal/indexer"
 	"github.com/spf13/cobra"
 )
@@ -15,10 +17,10 @@ var matchCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		checkAndTriggerBackgroundRebuild()
-		
+
 		// Strip trailing slashes so auto-completed paths work correctly
 		query := strings.TrimRight(strings.ToLower(args[0]), "/")
-		
+
 		repos, err := indexer.LoadIndex()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error loading index:", err)
@@ -80,6 +82,14 @@ var matchCmd = &cobra.Command{
 		if len(validMatches) == 0 {
 			os.Exit(1)
 		}
+
+		frecencyData, _ := frecency.Load()
+
+		sort.SliceStable(validMatches, func(i, j int) bool {
+			scoreI := frecency.Score(frecencyData[validMatches[i]])
+			scoreJ := frecency.Score(frecencyData[validMatches[j]])
+			return scoreI > scoreJ
+		})
 
 		for _, match := range validMatches {
 			fmt.Println(match)

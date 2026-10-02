@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/acmcelwee/git-index/internal/config"
+	"github.com/acmcelwee/git-index/internal/frecency"
 	"github.com/acmcelwee/git-index/internal/indexer"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +19,7 @@ var completeCmd = &cobra.Command{
 	Short: "Output list of repository basenames for shell completion",
 	Run: func(cmd *cobra.Command, args []string) {
 		checkAndTriggerBackgroundRebuild()
-		
+
 		repos, err := indexer.LoadIndex()
 		if err != nil || len(repos) == 0 {
 			// Try to build index once if empty, but silently
@@ -32,14 +34,36 @@ var completeCmd = &cobra.Command{
 		fmt.Println("--add-root")
 		fmt.Println("--list")
 
-		// Use a map to deduplicate DisplayNames
-		seen := make(map[string]bool)
+		frecencyData, _ := frecency.Load()
+
+		type completionItem struct {
+			name  string
+			score float64
+		}
+
+		nameScores := make(map[string]float64)
 		for _, repo := range repos {
-			if !seen[repo.DisplayName] {
-				// Append a trailing slash to make menu selection visually distinct
-				fmt.Println(repo.DisplayName + "/")
-				seen[repo.DisplayName] = true
+			score := frecency.Score(frecencyData[repo.Path])
+			if current, exists := nameScores[repo.DisplayName]; !exists || score > current {
+				nameScores[repo.DisplayName] = score
 			}
+		}
+
+		var items []completionItem
+		for name, score := range nameScores {
+			items = append(items, completionItem{name: name, score: score})
+		}
+
+		sort.SliceStable(items, func(i, j int) bool {
+			// Alphabetical tiebreaker
+			if items[i].score == items[j].score {
+				return items[i].name < items[j].name
+			}
+			return items[i].score > items[j].score
+		})
+
+		for _, item := range items {
+			fmt.Println(item.name + "/")
 		}
 	},
 }
@@ -49,7 +73,7 @@ func checkAndTriggerBackgroundRebuild() {
 	if err != nil {
 		return
 	}
-	
+
 	intervalStr := cfg.AutoRebuildInterval
 	if intervalStr == "" {
 		intervalStr = "24h"
@@ -63,7 +87,7 @@ func checkAndTriggerBackgroundRebuild() {
 	if err != nil {
 		return
 	}
-	
+
 	indexPath := filepath.Join(cacheDir, "index.json")
 	stat, err := os.Stat(indexPath)
 	if err != nil {
@@ -74,7 +98,7 @@ func checkAndTriggerBackgroundRebuild() {
 		// Touch the file immediately to prevent multiple forks
 		currentTime := time.Now().Local()
 		os.Chtimes(indexPath, currentTime, currentTime)
-		
+
 		// Fork background rebuild
 		execPath, err := os.Executable()
 		if err == nil {
