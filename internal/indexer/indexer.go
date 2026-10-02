@@ -107,22 +107,29 @@ func Index() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
 		return err
 	}
 
-	indexPath := filepath.Join(cacheDir, "index.txt")
-	file, err := os.Create(indexPath)
+	tempPath := filepath.Join(cacheDir, "index.txt.tmp")
+	file, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	writer := bufio.NewWriter(file)
 	for _, repo := range allRepos {
 		_, _ = writer.WriteString(repo + "\n")
 	}
-	return writer.Flush()
+	
+	if err := writer.Flush(); err != nil {
+		file.Close()
+		return err
+	}
+	file.Close()
+
+	indexPath := filepath.Join(cacheDir, "index.txt")
+	return os.Rename(tempPath, indexPath)
 }
 
 func LoadIndex() ([]string, error) {

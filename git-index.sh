@@ -69,6 +69,6 @@ c() {
     fi
 
     if [ -n "$target_dir" ]; then
-        cd "$target_dir"
+        cd -- "$target_dir"
     fi
 }
