@@ -4,13 +4,32 @@
 _git_index_zsh_complete() {
     local -a completions
     completions=("${(@f)$(git-index complete)}")
-    _describe 'repositories' completions
+
+    # Use native zsh array filtering to split flags (--*) and repos
+    local -a flags=("${(@M)completions:#--*}")
+    local -a repos=("${(@)completions:#--*}")
+
+    # Add flags into a sorted 'options' group with a header
+    if (( ${#flags[@]} )); then
+        compadd -J 'options' -X 'options' -a flags
+    fi
+
+    # Add repositories into an unsorted 'repositories' group with a header
+    if (( ${#repos[@]} )); then
+        compadd -V 'repositories' -X 'repositories' -a repos
+    fi
 }
 
 if [[ -n "$ZSH_VERSION" ]]; then
     # Unbind any old scm_breeze compctl/compdef just in case
     compdef -d c 2>/dev/null || true
     compdef _git_index_zsh_complete c
+    
+    # Bypass fzf-tab and Zsh's aggressive alphabetical sorting overrides
+    zstyle ':completion:*:c:*' sort false
+    zstyle ':completion:*:*:c:*' sort false
+    zstyle ':completion:*:c:*' matcher-list ''
+    zstyle ':fzf-tab:complete:c:*' fzf-flags '--no-sort' '--reverse'
 fi
 
 # Bash completion
@@ -22,7 +41,8 @@ _git_index_bash_complete() {
 }
 
 if [[ -n "$BASH_VERSION" ]]; then
-    complete -F _git_index_bash_complete c
+    # -o nosort prevents Bash 4.4+ from sorting our frecency ranking
+    complete -o nosort -F _git_index_bash_complete c 2>/dev/null || complete -F _git_index_bash_complete c
 fi
 
 # Remove any existing alias for c to ensure our function is called
@@ -70,6 +90,8 @@ c() {
     fi
 
     if [ -n "$target_dir" ]; then
+        # Track frecency in background, suppressing job control messages
+        (git-index track "$target_dir" >/dev/null 2>&1 &)
         cd -- "$target_dir"
     fi
 }
