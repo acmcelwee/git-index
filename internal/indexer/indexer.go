@@ -14,8 +14,19 @@ import (
 
 type RepoEntry struct {
 	Path        string `json:"path"`
-	DisplayName string `json:"display_name"`
+	ParentPath  string `json:"parent_path,omitempty"`
 	Type        string `json:"type"` // "repo", "worktree", "submodule"
+}
+
+
+func (r RepoEntry) DisplayName() string {
+	baseName := filepath.Base(r.Path)
+	if r.Type == "worktree" && r.ParentPath != "" {
+		return fmt.Sprintf("%s [%s, %s]", filepath.Base(r.ParentPath), baseName, r.Path)
+	} else if r.Type == "submodule" && r.ParentPath != "" {
+		return fmt.Sprintf("%s [%s, %s]", filepath.Base(r.ParentPath), baseName, r.Path)
+	}
+	return baseName
 }
 
 func expandHome(path string) (string, error) {
@@ -42,10 +53,10 @@ func isIgnored(path string, ignores []string) bool {
 }
 
 func parseGitFile(dotGitPath string, repoPath string) RepoEntry {
-	baseName := filepath.Base(repoPath)
+	
 	content, err := os.ReadFile(dotGitPath)
 	if err != nil {
-		return RepoEntry{Path: repoPath, DisplayName: baseName, Type: "repo"}
+		return RepoEntry{Path: repoPath,  Type: "repo"}
 	}
 
 	contentStr := strings.TrimSpace(string(content))
@@ -56,25 +67,25 @@ func parseGitFile(dotGitPath string, repoPath string) RepoEntry {
 		parts := strings.Split(gitdir, "/.git/")
 		if len(parts) == 2 {
 			parentPath := parts[0]
-			parentName := filepath.Base(parentPath)
+			
 
 			if strings.HasPrefix(parts[1], "worktrees/") {
 				return RepoEntry{
 					Path:        repoPath,
-					DisplayName: parentName + "+" + baseName,
+					ParentPath:  parentPath,
 					Type:        "worktree",
 				}
 			} else if strings.HasPrefix(parts[1], "modules/") {
 				return RepoEntry{
 					Path:        repoPath,
-					DisplayName: parentName + "@" + baseName,
+					ParentPath:  parentPath,
 					Type:        "submodule",
 				}
 			}
 		}
 	}
 
-	return RepoEntry{Path: repoPath, DisplayName: baseName, Type: "repo"}
+	return RepoEntry{Path: repoPath,  Type: "repo"}
 }
 
 func Index() error {
@@ -103,7 +114,7 @@ func Index() error {
 				if stat, err := os.Stat(dotGit); err == nil {
 					var entry RepoEntry
 					if stat.IsDir() {
-						entry = RepoEntry{Path: rootPath, DisplayName: filepath.Base(rootPath), Type: "repo"}
+						entry = RepoEntry{Path: rootPath,  Type: "repo"}
 					} else {
 						entry = parseGitFile(dotGit, rootPath)
 					}
@@ -143,7 +154,7 @@ func Index() error {
 					repoPath := filepath.Dir(path)
 					var entry RepoEntry
 					if d.IsDir() {
-						entry = RepoEntry{Path: repoPath, DisplayName: filepath.Base(repoPath), Type: "repo"}
+						entry = RepoEntry{Path: repoPath,  Type: "repo"}
 					} else {
 						entry = parseGitFile(path, repoPath)
 					}
@@ -162,7 +173,19 @@ func Index() error {
 		}(sdir)
 	}
 
+	
 	wg.Wait()
+
+	// Deduplicate repos by Path
+	seen := make(map[string]bool)
+	var dedupedRepos []RepoEntry
+	for _, repo := range allRepos {
+		if !seen[repo.Path] {
+			seen[repo.Path] = true
+			dedupedRepos = append(dedupedRepos, repo)
+		}
+	}
+	allRepos = dedupedRepos
 
 	cacheDir, err := config.GetCacheDir()
 	if err != nil {
@@ -277,7 +300,7 @@ func migrateOldIndex(oldPath string) ([]RepoEntry, error) {
 		if strings.TrimSpace(line) != "" {
 			repos = append(repos, RepoEntry{
 				Path:        line,
-				DisplayName: filepath.Base(line),
+				
 				Type:        "repo",
 			})
 		}

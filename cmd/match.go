@@ -40,7 +40,7 @@ var matchCmd = &cobra.Command{
 		var pathMatches []indexer.RepoEntry
 
 		for _, repo := range repos {
-			display := strings.ToLower(repo.DisplayName)
+			display := strings.ToLower(repo.DisplayName())
 			if display == query {
 				exactMatches = append(exactMatches, repo)
 			} else if strings.HasPrefix(display, query) {

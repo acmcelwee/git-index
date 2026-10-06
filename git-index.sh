@@ -16,7 +16,7 @@ _git_index_zsh_complete() {
 
     # Add repositories into an unsorted 'repositories' group with a header
     if (( ${#repos[@]} )); then
-        compadd -V 'repositories' -X 'repositories' -a repos
+        compadd -V 'repositories' -X 'repositories' -d repos -a repos
     fi
 }
 
@@ -30,6 +30,7 @@ if [[ -n "$ZSH_VERSION" ]]; then
     zstyle ':completion:*:*:c:*' sort false
     zstyle ':completion:*:c:*' matcher-list ''
     zstyle ':fzf-tab:complete:c:*' fzf-flags '--no-sort' '--reverse'
+    zstyle ':fzf-tab:complete:c:*' accept-line enter
 fi
 
 # Bash completion
@@ -64,9 +65,9 @@ c() {
         return
     fi
     
-    local target_dirs=$(git-index match "$1")
+    local target_dirs=$(git-index match "$*")
     if [ -z "$target_dirs" ]; then
-        echo "No matching repository found for '$1'"
+        echo "No matching repository found for '$*'"
         return 1
     fi
     

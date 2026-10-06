@@ -45,8 +45,8 @@ var completeCmd = &cobra.Command{
 		nameScores := make(map[string]float64)
 		for _, repo := range repos {
 			score := frecency.Score(frecencyData[repo.Path], halfLife)
-			if current, exists := nameScores[repo.DisplayName]; !exists || score > current {
-				nameScores[repo.DisplayName] = score
+			if current, exists := nameScores[repo.DisplayName()]; !exists || score > current {
+				nameScores[repo.DisplayName()] = score
 			}
 		}
 
